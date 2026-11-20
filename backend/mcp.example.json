@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "google-classroom": {
+      "transport": "streamable-http",
+      "url": "https://classroommcp.googleapis.com/mcp/v1",
+      "auth": "OAuth 2.0 user-delegated; use an AI-powered-agent OAuth client"
+    },
+    "google-drive": {
+      "transport": "streamable-http",
+      "url": "https://drivemcp.googleapis.com/mcp/v1",
+      "auth": "OAuth 2.0 user-delegated; use an AI-powered-agent OAuth client"
+    }
+  }
+}
