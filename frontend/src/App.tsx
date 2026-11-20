@@ -1,122 +1,24 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
+import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 
-function App() {
-  const [count, setCount] = useState(0)
-
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+type Assignment={id:string;title:string;description:string;course:string;due_date:string|null;status:string;created_at:string;attachment_names:string[]}
+type Integration={name:string;configured:boolean;available:boolean;message:string}
+const API=import.meta.env.VITE_API_URL||'http://localhost:8000'
+async function api<T>(path:string,init?:RequestInit):Promise<T>{const r=await fetch(API+path,init);if(!r.ok){const b=await r.json().catch(()=>null);throw Error(b?.error?.message||'Could not reach ScholarFlow API')}return r.json()}
+const dateLabel=(d:string|null)=>d?new Date(`${d}T12:00:00`).toLocaleDateString('en',{month:'short',day:'numeric'}):'No due date'
+function App(){
+ const [items,setItems]=useState<Assignment[]>([]),[integrations,setIntegrations]=useState<Integration[]>([]),[page,setPage]=useState('Overview'),[selected,setSelected]=useState<Assignment|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(''),[saving,setSaving]=useState(false),[form,setForm]=useState({title:'',course:'',due_date:'',description:''})
+ const refresh=async()=>{setLoading(true);setError('');try{const [a,i]=await Promise.all([api<Assignment[]>('/api/v1/assignments/'),api<{integrations:Integration[]}>('/api/v1/integrations/')]);setItems(a);setIntegrations(i.integrations)}catch(e){setError(e instanceof Error?e.message:'Unable to load data')}finally{setLoading(false)}}
+ useEffect(()=>{const timer=window.setTimeout(()=>void refresh(),0);return()=>window.clearTimeout(timer)},[])
+ const classroom=integrations.find(x=>x.name==='Google Classroom'),counts=useMemo(()=>({total:items.length,due:items.filter(a=>a.due_date&&a.due_date>=new Date().toISOString().slice(0,10)).length,done:items.filter(a=>a.status==='Completed').length}),[items])
+ const create=async(e:React.FormEvent)=>{e.preventDefault();setSaving(true);try{const a=await api<Assignment>('/api/v1/assignments/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...form,due_date:form.due_date||null})});const files=(document.querySelector('#files') as HTMLInputElement)?.files;if(files?.length){const d=new FormData();Array.from(files).forEach(f=>d.append('files',f));await api(`/api/v1/assignments/${a.id}/upload`,{method:'POST',body:d})}setForm({title:'',course:'',due_date:'',description:''});setPage('Assignments');await refresh()}catch(e){setError(e instanceof Error?e.message:'Could not save assignment')}finally{setSaving(false)}}
+ const nav=['Overview','Assignments','Integrations']
+ return <div className="shell"><aside className="sidebar"><a className="brand" href="#" onClick={e=>{e.preventDefault();setPage('Overview')}}><b className="logo">S</b><span>ScholarFlow <i>AI</i><small>STUDENT WORKSPACE</small></span></a><label className="navlabel">WORKSPACE</label>{nav.map((n,i)=><button key={n} className={'nav '+(page===n?'active':'')} onClick={()=>{setPage(n);setSelected(null)}}><span>{['⌂','▤','⌘'][i]}</span>{n}{n==='Assignments'&&items.length>0&&<small>{items.length}</small>}</button>)}<div className="sidefoot"><div className="help"><b>✳</b><strong>Your next great paper<br/>starts here.</strong><p>Keep every assignment and idea in one focused space.</p></div><div className="profile"><b>SF</b><span><strong>My workspace</strong><small>Personal account</small></span></div></div></aside><main><header><span>Workspace <i>/</i> <b>{selected?'Assignment details':page}</b></span><small><i/> Local workspace</small></header><section className="content">{error&&<div className="alert">{error}<button onClick={()=>setError('')}>Dismiss</button></div>}
+ {page==='Create'?<div className="formwrap"><button className="back" onClick={()=>setPage('Assignments')}>← Back to assignments</button><div className="eyebrow">NEW WORK</div><h1>Create assignment</h1><p>Capture the requirements and materials in one place.</p><form onSubmit={create}><label>Assignment title <em>*</em><input required maxLength={200} placeholder="e.g. The ethics of artificial intelligence" value={form.title} onChange={e=>setForm({...form,title:e.target.value})}/></label><div className="formrow"><label>Course or subject<input maxLength={160} placeholder="e.g. Introduction to Philosophy" value={form.course} onChange={e=>setForm({...form,course:e.target.value})}/></label><label>Due date<input type="date" value={form.due_date} onChange={e=>setForm({...form,due_date:e.target.value})}/></label></div><label>Instructions<textarea rows={5} maxLength={20000} placeholder="Paste assignment instructions, rubric, or notes..." value={form.description} onChange={e=>setForm({...form,description:e.target.value})}/></label><label className="upload">＋ &nbsp; Attach PDF or DOCX <small> · up to 15 MB each</small><input id="files" type="file" accept=".pdf,.docx" multiple/></label><div className="actions"><button type="button" className="button secondary" onClick={()=>setPage('Assignments')}>Cancel</button><button className="button primary" disabled={saving}>{saving?'Saving…':'Save assignment →'}</button></div></form></div>:selected?<><button className="back" onClick={()=>setSelected(null)}>← Back to assignments</button><div className="eyebrow">ASSIGNMENT DETAILS</div><h1>{selected.title}</h1><p>{selected.course||'Independent study'} · Due {dateLabel(selected.due_date)}</p><article className="detail"><h3>Instructions</h3><p>{selected.description||'No instructions added yet.'}</p>{selected.attachment_names.length>0&&<><h3>Attachments</h3>{selected.attachment_names.map(x=><p key={x}>{x}</p>)}</>}</article></>:page==='Integrations'?<><div className="eyebrow">CONNECTED SERVICES</div><h1>Integrations</h1><p>Services require credentials and access in your Google Cloud project.</p><div className="integrations">{integrations.map(i=><article key={i.name}><b className="inticon">{i.name.includes('Drive')?'△':'▣'}</b><div><h3>{i.name}<small className={'pill '+(i.available?'on':'')}>{i.available?'Available':i.configured?'Needs authentication':'Not configured'}</small></h3><p>{i.message}</p></div></article>)}</div><p className="muted">Google Workspace MCP is in Developer Preview. Configure OAuth and enable the relevant Google APIs and MCP services.</p></>:<>
+ <div className="welcome"><div><div className="eyebrow">YOUR ACADEMIC WORKSPACE</div><h1>{page==='Assignments'?'Assignments':'Good work starts with a plan.'}</h1><p>{page==='Assignments'?'Keep track of every brief, deadline, and course.':'A calmer way to take your assignments from brief to finished.'}</p></div><button className="button primary" onClick={()=>{setPage('Create');setSelected(null)}}>＋ New assignment</button></div>
+ {page==='Overview'&&<><div className="banner"><div><span>✦ &nbsp;FOCUSED WORK, MADE SIMPLE</span><h2>Make room for your<br/><i>best thinking.</i></h2><p>Start with a clear brief. Keep the work organized.</p><button className="button" onClick={()=>setPage('Create')}>Create an assignment →</button></div><div className="paper"><small>YOUR NEXT STEP</small><hr/><hr/><hr/><hr/><p>✳ &nbsp; Idea in progress</p></div></div><div className="stats">{[['Total assignments',loading?'—':counts.total,'Across all your courses'],['Upcoming deadlines',loading?'—':counts.due,'Due today or later'],['Completed',loading?'—':counts.done,'Look at you go'],['Google Classroom',classroom?.available?'Connected':'Not connected',classroom?.message||'Checking status…']].map((s,i)=><article key={s[0]}><div>{s[0]} <b className={'statmark s'+i}>{['▤','◷','✓','▣'][i]}</b></div><strong className={i===3?'connect':''}>{s[1]}</strong><small>{s[2]}</small></article>)}</div></>}
+ <div className="sectionhead"><div><h2>{page==='Assignments'?'All assignments':'Recent assignments'}</h2><p>{items.length?`${items.length} assignment${items.length===1?'':'s'} in your workspace`:'Your work will show up here'}</p></div>{items.length>0&&<button className="link" onClick={()=>setPage('Assignments')}>View all →</button>}</div>
+ {loading?<div className="empty">Loading your assignments…</div>:items.length===0?<div className="empty"><b>✳</b><h3>A fresh start.</h3><p>Add your first assignment to bring all the details together.</p><button className="button secondary" onClick={()=>setPage('Create')}>Create your first assignment →</button></div>:<div className="list">{items.map((a,i)=><button className="row" key={a.id} onClick={()=>setSelected(a)}><b className={'course c'+i%4}>{(a.course||'A').slice(0,1).toUpperCase()}</b><span className="assignment"><strong>{a.title}</strong><small>{a.course||'Independent study'}{a.attachment_names.length?` · ${a.attachment_names.length} attachment(s)`:''}</small></span><span className="duedate">{dateLabel(a.due_date)}</span><span className="state">● &nbsp;{a.status}</span><span>↗</span></button>)}</div>}
+ </> }</section><footer>ScholarFlow AI <i>·</i> Your academic work, in good flow.</footer></main></div>
 }
-
 export default App
